@@ -1,0 +1,23 @@
+# cargo-deny's checks, run with `cargo deny check`: the licences of every crate in the build, see the licences rule in
+# the README, the advisories against them, and where they come from. The crate has no dependencies, so this is to keep
+# it that way unless one is approved.
+
+[graph]
+all-features = true
+
+[licenses]
+# Crates which are MIT OR Apache-2.0 pass by Apache-2.0, so that one which is MIT only, or another permissive licence,
+# fails until it is listed in exceptions, by crate, with what pulls it in.
+allow = ["Apache-2.0"]
+confidence-threshold = 0.9
+
+[advisories]
+# RustSec's advisories: a vulnerable crate fails, an unmaintained one is a warning, so that it is seen.
+unmaintained = "workspace"
+
+[bans]
+multiple-versions = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
