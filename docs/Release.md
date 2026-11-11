@@ -1,47 +1,88 @@
 # Releasing bruce-util-progress
 
-How a version is published to crates.io. Each version is developed on a `vX.Y.Z` branch, published from it, tagged,
-and merged to `main`. A published version can never be changed or removed, only yanked, which stops new projects from
-choosing it, so everything is checked before `cargo publish`. The crates.io account and token are set up once, see
-bruce-db's [docs/Release.md](https://github.com/bruceskingle/bruce-db/blob/main/docs/Release.md).
+How a version of bruce-util-progress is published to crates.io. A published version can never be changed or removed,
+only yanked, which stops new projects from choosing it, so everything is checked before `cargo publish`. These are
+the steps by hand, until bruce-method-release does them.
 
-The checks, which CI runs too, see `.github/workflows/ci.yml`, except clippy and the dry run:
+## Names
+
+- **`vX.Y.Z`**: the branch a version is developed on, with `X.Y.Z` in `Cargo.toml`.
+- **`releaseX.Y.Z`**: the annotated tag on `main` of the commit published as `X.Y.Z`.
+- **`main`**: only releases, each one a squash merge of its branch.
+
+After each release the next version's branch, `vX.(Y+1).0`, is started from `main`. A fix to a released version is
+made on a `vX.Y.(Z+1)` branch from its tag, only when one is needed.
+
+The crates.io account and token are set up once, see bruce-db's
+[docs/Release.md](https://github.com/bruceskingle/bruce-db/blob/main/docs/Release.md).
+
+## Each release
+
+The checks, which CI runs too, see `.github/workflows/ci.yml`, except clippy and the dry run, then push:
 
 ```sh
 cd ~/git/bruce-util-progress
 git switch v0.1.0
+git status --short
 cargo fmt --all --check
 cargo clippy --all-targets
 cargo test
 cargo deny check
 cargo publish --dry-run
+git push
 ```
 
-Commit and push, as `cargo publish` refuses a checkout with uncommitted changes, then publish:
+Squash merge the branch to `main` with a pull request, tag `main`, and publish from the tag, so that the tag, `main`
+and the published crate are the same commit, which crates.io records in the package's `.cargo_vcs_info.json`:
 
 ```sh
-git commit -am "Release 0.1.0"
-git push
+gh pr create --base main --head v0.1.0 --title "V0.1.0" --body "Release 0.1.0"
+gh pr merge v0.1.0 --squash
+git fetch origin
+git tag -a release0.1.0 origin/main -m "bruce-util-progress release0.1.0"
+git push origin release0.1.0
+git switch --detach release0.1.0
 cargo publish
 ```
 
 Check https://crates.io/crates/bruce-util-progress, and its documentation on https://docs.rs/bruce-util-progress,
-which builds within a few minutes. Then tag the release and merge it to `main`:
+which builds within a few minutes.
+
+Then start the next version's branch from `main`, with its version in `Cargo.toml`:
 
 ```sh
-git tag -a v0.1.0 -m "bruce-util-progress 0.1.0"
-git push origin v0.1.0
-git switch main
-git merge --squash v0.1.0 && git commit -m "Release 0.1.0"
-git push
+git switch -c v0.2.0 origin/main
+# version = "0.2.0" in Cargo.toml
+cargo build
+git commit -am "Start v0.2.0"
+git push -u origin v0.2.0
 ```
 
-The next version's branch is made when work on it starts, as its number depends on what it is: a fix, e.g.
-`v0.1.1`, or something new, e.g. `v0.2.0`. It starts from the release's tag, with its version in `Cargo.toml`:
+## A fix to a released version
+
+On a branch from the release's tag, released as above, its pull request squash merged to `main`, which holds the last
+release, then merged into the branch being developed, so that it has the fix too:
 
 ```sh
-git switch -c v0.1.1 v0.1.0
+git switch -c v0.1.1 release0.1.0
+# version = "0.1.1" in Cargo.toml, the fix, then the release as above
+git switch v0.2.0
+git merge origin/main
 ```
 
-Libraries which use it, e.g. bruce-db, depend on the published version, with a path to a checkout next to theirs for
-working on both, `{ version = "0.1.0", path = "../bruce-util-progress" }`, which cargo leaves out when publishing them.
+## 0.1.0
+
+0.1.0 was published from the branch on 10 November 2026, before this order was settled, and tagged on 11 November.
+`main` was fast forwarded to the tag, rather than squash merged, so that the tag, `main` and the published crate
+are the same commit, as after any other release.
+
+## Crates which use it
+
+A crate depends on the published version, e.g. `bruce-util-progress = "0.1.0"`, and, to work on both, a git-ignored
+`.cargo/config.toml` in its checkout points at the checkout next to it, which is taken out again once the changes
+made with it are released:
+
+```toml
+[patch.crates-io]
+bruce-util-progress = { path = "../bruce-util-progress" }
+```
